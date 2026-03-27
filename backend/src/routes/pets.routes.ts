@@ -1,16 +1,16 @@
 import { Router } from 'express';
+import { listAvaliablePets, registerPet } from '../controllers/pets.controllers.js';
+import { authMiddleware } from '../middlewares/auth.middleware.js';
+import { adminOnly } from '../middlewares/admin-only.middleware.js';
+
 
 const petsRoutes= Router();
 
 //rotas de pets
 
-petsRoutes.get('/', async (req, res) => {
-    return res.status(501).json({ message: 'Not implemented yet' });
-});
+petsRoutes.get('/', listAvaliablePets);
 
 
-petsRoutes.post('/', async (req, res) => {
-    return res.status(501).json({ message: 'Not implemented yet' });
-});
+petsRoutes.post('/', authMiddleware, adminOnly, registerPet);
 
 export default petsRoutes;

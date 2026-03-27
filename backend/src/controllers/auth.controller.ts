@@ -57,56 +57,54 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-    try {
-        const emailRaw = req.body?.email
-        const passwordRaw = req.body?.password
+  try {
+    const emailRaw = req.body?.email
+    const passwordRaw = req.body?.password
 
-        if(!emailRaw || !passwordRaw) {
-            return res.status(400).json({ message: 'email and password are required' })
-        }
-
-        const normalizedEmail = String(emailRaw).trim().toLowerCase()
-        const password = String(passwordRaw)
-
-        const [rows] = await pool.execute<any[]>(
-            'SELECT id, password_hash FROM users WHERE email = ? LIMIT 1',
-            [normalizedEmail]
-        )
-        if(rows.length === 0) {
-            return res.status(401).json({ message: 'Invalid email or password' })
-        }
-
-        const user = rows[0]
-
-        const passwordMatch = await bcrypt.compare(password, user.password_hash)
-
-        if(!passwordMatch) {
-            return res.status(401).json({ message: 'Invalid email or password' })
-        }
-
-        if(!process.env.JWT_SECRET) {
-            return res.status(500).json({ message: 'JWT secret not configured' })
-        }
-
-        const token = jwt.sign(
-            { sub: String(user.id), role: user.role, name: user.name},
-            process.env.JWT_SECRET,
-            { expiresIn: '2h'}
-
-        )
-
-        return res.status(200).json({
-            token,
-            user: {
-                id: user.id,
-                name: user.name,
-                role: user.role
-            }
-        })
-
-        
-} catch (err) {
-        console.error('Error logging in:', err)
-        return res.status(500).json({ message: 'Error logging in' })
+    if (!emailRaw || !passwordRaw) {
+      return res.status(400).json({ message: 'email and password are required' })
     }
+
+    const normalizedEmail = String(emailRaw).trim().toLowerCase()
+    const password = String(passwordRaw)
+
+    const [rows] = await pool.execute<any[]>(
+      'SELECT id, name, role, password_hash FROM users WHERE email = ? LIMIT 1',
+      [normalizedEmail]
+    )
+
+    if (rows.length === 0) {
+      return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    const user = rows[0]
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash)
+
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT secret not configured' })
+    }
+
+    const token = jwt.sign(
+      { sub: String(user.id), role: user.role, name: user.name },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    )
+
+    return res.status(200).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role
+      }
+    })
+  } catch (err) {
+    console.error('Error logging in:', err)
+    return res.status(500).json({ message: 'Error logging in' })
+  }
 }
