@@ -11,16 +11,16 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        return res.status(200).json({ ok: true, db: 'up' });
+    } catch (err) {
+        console.error('Database connection failed:', err);
+        return res.status(500).json({ ok: false, db: 'down' });
+    }
+})
+
 //rotas
 app.use('/api', routes);
 
-app.get('/', async (req, res) => {
-    try {
-        await pool.query('SELECT 1');
-        res.send('API is working!');
-    } catch(err) {
-        console.error('Database connection failed:', err);
-        res.status(500).send('Database connection failed');
-    }
-    
-});
