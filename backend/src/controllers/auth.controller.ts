@@ -1,110 +1,79 @@
 
+
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import type { Request, Response } from 'express';
 import { pool } from '../config/db.js'
+import type { LoginInput, RegisterInput } from '../schemas/auth.schema.js';
 
 
 // controller para registrar um novo usuário
 export const register = async (req: Request, res: Response) => {
-
   try {
-    // validar os dados de entrada
-    const nameRaw = req.body?.name
-    const emailRaw = req.body?.email
-    const passwordRaw = req.body?.password
+    const { name, email, password} = req.body as RegisterInput
 
-    // checar se os campos estão presentes
-    if (!nameRaw || !emailRaw || !passwordRaw) {
-      return res.status(400).json({ message: 'name, email and password are required' })
-    }
+    //checa email duplicado
 
-    // validar os campos
-    const name = String(nameRaw).trim()
-    const email = String(emailRaw).trim().toLowerCase()
-    const password = String(passwordRaw)
-    // validar se os campos cumprem os requisitos mínimos
-    if (name.length < 2) {
-      return res.status(400).json({ message: 'name must have at least 2 characters' })
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'password must have at least 6 characters' })
-    }
-
-    // checar se já existe
     const [rows] = await pool.execute<any[]>(
       'SELECT id FROM users WHERE email = ? LIMIT 1',
       [email]
     )
 
     if (rows.length > 0) {
-      return res.status(409).json({ message: 'email already in use' })
+      return res.status(400).json({ message: 'Email already in use' })
     }
-    // criar o hash da senha
-    const passwordHash = await bcrypt.hash(password, 10)
-    // inserir o usuário no banco
-    await pool.execute(
-      'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
-      [name, email, passwordHash, 'user']
-    )
 
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    await pool.execute(
+      'INSERT INTO users (name, email, hashedPassword, role) VALUES (?, ?, ?, ?)',
+      [name, email, hashedPassword, 'user']
+    )
     return res.status(201).json({ message: 'User registered successfully' })
-  } catch (err) {
-    console.error('Error registering user:', err)
-    return res.status(500).json({ message: 'Error registering user' })
+
+  } catch (error) {
+    console.error('Error registering user:', error)
+    return res.status(500).json({ message: 'Error registering user', error })
   }
-};
+}
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const emailRaw = req.body?.email
-    const passwordRaw = req.body?.password
-
-    if (!emailRaw || !passwordRaw) {
-      return res.status(400).json({ message: 'email and password are required' })
-    }
-
-    const normalizedEmail = String(emailRaw).trim().toLowerCase()
-    const password = String(passwordRaw)
+    const { email, password } = req.body as LoginInput
 
     const [rows] = await pool.execute<any[]>(
-      'SELECT id, name, role, password_hash FROM users WHERE email = ? LIMIT 1',
-      [normalizedEmail]
+      'SELECT id, name, hashedPassword, role FROM users WHERE email = ? LIMIT 1',
+      [email]
     )
-
-    if (rows.length === 0) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+    if(rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid email or password' })
     }
-
     const user = rows[0]
 
-    const passwordMatch = await bcrypt.compare(password, user.password_hash)
+    const ok = await bcrypt.compare(password, user.hashedPassword)
 
-    if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+    if(!ok) {
+      return res.status(400).json({ message: 'Invalid email or password' })
     }
 
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ message: 'JWT secret not configured' })
+    if(!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT secret not configured'})
     }
+
+    //gerar token
 
     const token = jwt.sign(
-      { sub: String(user.id), role: user.role, name: user.name },
+      { userId: user.id, name: user.name, role: user.role},
       process.env.JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: '1h' }
     )
 
-    return res.status(200).json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        role: user.role
-      }
-    })
-  } catch (err) {
-    console.error('Error logging in:', err)
-    return res.status(500).json({ message: 'Error logging in' })
+    return res.status(200).json({ token })
+  } catch(error) {
+    console.error('Error logging in:', error)
+    return res.status(500).json({ message: 'Error logging in', error })
   }
-}
+};
+
+
+
